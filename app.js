@@ -6,7 +6,7 @@ document.getElementById('historialBtn').addEventListener('click', mostrarHistori
 
 async function getServices() {
     const res = await fetch(
-        "https://1wdnbdbf.api.sanity.io/v2026-05-30/data/query/production?query=*[_type==%22service%22]&perspective=drafts"
+        "https://1wdnbdbf.api.sanity.io/v2026-05-30/data/query/production?query=*[_type==%22service%22]"
     );
     const data = await res.json();
     return data.result;
