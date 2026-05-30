@@ -1,25 +1,24 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>La galardonada</title>
+  <meta charset="UTF-8" />
+  <title>Servicios AI</title>
 </head>
 <body>
-    <h1>La galardonada</h1>
-    <form id="chat">
-        <textarea id="input" placeholder="Escribe tu mensaje aquí..." rows="4" cols="50"></textarea><br>
-        <br>
-        <button type="button" id="enviarBtn">Enviar</button>
-        <br>
-        <br>
-        <button type="button" id="historialBtn">Mostrar Historial</button>  
-    </form>
-    <br>
-    <div id="response"></div>
-    <br>
-    <div id="historial"></div>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="app.js"></script>
+
+  <h1>Asistente de Servicios</h1>
+
+  <input id="input" placeholder="Escribe lo que necesitas..." />
+  <button id="btn">Enviar</button>
+
+  <div id="response"></div>
+
+  <hr>
+
+  <h2>Historial</h2>
+  <button id="histBtn">Cargar historial</button>
+  <div id="history"></div>
+
+  <script src="app.js"></script>
 </body>
 </html>

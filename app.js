@@ -1,55 +1,42 @@
-document.getElementById('enviarBtn').addEventListener('click', () => {
-    const message = document.getElementById('input').value.trim();
-    generarRespuesta(message);
-});
-document.getElementById('historialBtn').addEventListener('click', mostrarHistorial);
+document.getElementById("btn").addEventListener("click", send);
+document.getElementById("histBtn").addEventListener("click", loadHistory);
 
-async function getServices() {
-    const res = await fetch(
-        "https://1wdnbdbf.api.sanity.io/v2026-05-30/data/query/production?query=*[_type==%22service%22]"
-    );
-    const data = await res.json();
-    return data.result;
+async function ai(message) {
+  const res = await fetch("ia.php", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message }),
+  });
+  const data = await res.json();
+  return data.reply;
 }
 
-async function generarRespuesta(message) {
-    if (!message) return;
+async function loadHistory() {
+  document.getElementById("history").innerHTML = "Cargando historial...";
+  await new Promise(resolve => setTimeout(resolve, 1000)); // Simula un retraso
+  const res = await fetch("ia.php?action=history");
+  const data = await res.json();
+  const history = data.history ?? [];
 
-    const responseBox = document.getElementById('response');
-    responseBox.innerHTML = 'Cargando...';
+  const container = document.getElementById("history");
+  if (!container) return;
 
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
-    const response = await fetch('ia.php', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message })
-    });
-
-    const data = await response.json();
-    responseBox.innerHTML = data.response;
-    document.getElementById('input').value = '';
+  container.innerHTML = history.map(item => `
+    <div class="message user">
+      <strong>Tú:</strong> ${item.user_message}
+    </div>
+    <div class="message ai">
+      <strong>Respuesta:</strong> ${item.ai_response}
+    </div>
+  `).join("");
 }
 
-async function mostrarHistorial() {
-    const historialBox = document.getElementById('historial');
-    historialBox.innerHTML = 'Cargando historial...';
+async function send() {
+  const msg = document.getElementById("input").value;
+  if (!msg) return;
 
-    await new Promise(resolve => setTimeout(resolve, 1000)); // Simula un retraso de 1 segundo
+  document.getElementById("response").innerHTML = "Procesando...";
 
-    const response = await fetch('ia.php', { method: 'GET' });
-    const data = await response.json();
-
-    historialBox.innerHTML = '';
-    data.forEach(entry => {
-        const userDiv = document.createElement('div');
-        userDiv.classList.add('user-entry');
-        userDiv.textContent = `USER: ${entry.user_message}`;
-        historialBox.appendChild(userDiv);
-
-        const assistantDiv = document.createElement('div');
-        assistantDiv.classList.add('assistant-entry');
-        assistantDiv.textContent = `ASSISTANT: ${entry.ai_response}`;
-        historialBox.appendChild(assistantDiv);
-    });
+  const response = await ai(msg);
+  document.getElementById("response").innerHTML = response;
 }

@@ -1,100 +1,75 @@
 <?php
+header('Content-Type: application/json');
+
 $env = parse_ini_file(__DIR__ . '/.env');
-$supabaseKey = $env['SUPABASE_KEY'];
+$supabase_url = $env['SUPABASE_URL'];
+$supabase_key = $env['SUPABASE_KEY'];
+
+// Devolver historial
+if(isset($_GET['action']) && $_GET['action'] === 'history'){
+    $ch = curl_init($supabase_url . '/rest/v1/messages?select=user_message,ai_response,created_at&order=created_at.asc');
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'apikey: ' . $supabase_key,
+        'Authorization: Bearer ' . $supabase_key,
+    ]);
+    $response = curl_exec($ch);
+    curl_close($ch);
+
+    echo json_encode(['history' => json_decode($response, true)]);
+    exit;
+}
 
 if($_SERVER['REQUEST_METHOD'] === 'POST'){
-    $input = json_decode(file_get_contents('php://input'), true);
-    $userMessage = $input['message'];
+    $body = json_decode(file_get_contents('php://input'), true);
+    $message = strtolower(trim($body['message'] ?? ''));
 
-    $services = getServicesFromSanity();
-    $msg = strtolower($userMessage);
+    // 1. Obtener servicios de Sanity
+    $url = 'https://1wdnbdbf.api.sanity.io/v2026-05-30/data/query/production?query=*%5B_type+%3D%3D+%22service%22%5D&perspective=drafts';
+    $ch = curl_init($url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    $response = curl_exec($ch);
+    curl_close($ch);
 
-    $match = null;
+    $data = json_decode($response, true);
+    $services = array_map(fn($s) => [
+        'title'       => $s['title'],
+        'price'       => $s['price'],
+        'description' => $s['description'],
+    ], $data['result']);
+
+    // 2. Buscar servicio que coincida
+    $found = null;
     foreach($services as $service){
-        if(isset($service['title'])){
-            $title = strtolower($service['title']);
-            // busca si alguna palabra del mensaje aparece en el título
-            $words = explode(' ', $msg);
-            foreach($words as $word){
-                if(strlen($word) > 2 && str_contains($title, $word)){
-                    $match = $service;
-                    break 2; // sale de ambos foreach
-                }
-            }
+        if(str_contains($message, strtolower($service['title']))){
+            $found = $service;
+            break;
         }
     }
 
-    $aiResponse = $match
-        ? $match['description'] . ' - ' . $match['price'] . '€'
-        : 'No he encontrado un servicio relacionado';
+    $reply = $found
+        ? "{$found['description']} - {$found['price']}€"
+        : 'No se encontró ningún servicio que coincida con tu búsqueda.';
 
-    guardarEnSupabase($userMessage, $aiResponse, $supabaseKey); // <-- pasa la key
-
-    header('Content-Type: application/json');
-    echo json_encode(['response' => $aiResponse]);
-}
-
-function getServicesFromSanity() {
-    $url = 'https://1wdnbdbf.api.sanity.io/v2026-05-30/data/query/production?query=*[_type==%22service%22]&perspective=drafts';
-
-    $ch = curl_init($url);
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_HTTPHEADER     => ['Content-Type: application/json']
+    // 3. Guardar en Supabase
+    $insert = json_encode([
+        'user_message' => $body['message'],
+        'ai_response'  => $reply,
     ]);
 
-    $result = curl_exec($ch);
+    $ch = curl_init($supabase_url . '/rest/v1/messages');
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $insert);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Content-Type: application/json',
+        'apikey: ' . $supabase_key,
+        'Authorization: Bearer ' . $supabase_key,
+        'Prefer: return=minimal',
+    ]);
+    curl_exec($ch);
     curl_close($ch);
 
-    $data = json_decode($result, true);
-    return $data['result'] ?? [];
-}
-
-if($_SERVER['REQUEST_METHOD'] === 'GET'){
-    $supabaseUrl = 'https://gvwudezsomphbkfkcqri.supabase.co';
-
-    $ch = curl_init("$supabaseUrl/rest/v1/messages?order=created_at.asc");
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_HTTPHEADER     => [
-            'Content-Type: application/json',
-            'apikey: ' . $supabaseKey,
-            'Authorization: Bearer ' . $supabaseKey,
-        ]
-    ]);
-
-    $result = curl_exec($ch);
-    curl_close($ch);
-
-    header('Content-Type: application/json');
-    echo $result;
-}
-
-function guardarEnSupabase($userMessage, $aiResponse, $supabaseKey) {
-    $supabaseUrl = 'https://gvwudezsomphbkfkcqri.supabase.co';
-
-    $datos = json_encode([
-        'user_message' => $userMessage,
-        'ai_response'  => $aiResponse
-    ]);
-
-    $ch = curl_init("$supabaseUrl/rest/v1/messages");
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_POST           => true,
-        CURLOPT_HTTPHEADER     => [
-            'Content-Type: application/json',
-            'apikey: ' . $supabaseKey,
-            'Authorization: Bearer ' . $supabaseKey,
-            'Prefer: return=minimal'
-        ],
-        CURLOPT_POSTFIELDS => $datos
-    ]);
-
-    $result = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-
-    error_log("Supabase HTTP code: " . $httpCode);
-    error_log("Supabase response: " . $result);
+    // 4. Devolver respuesta al JS
+    echo json_encode(['reply' => $reply]);
 }
